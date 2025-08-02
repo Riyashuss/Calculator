@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Advanced Calculator</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #222;
+    color: #eee;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+  #calculator {
+    background: #333;
+    padding: 20px;
+    border-radius: 10px;
+    width: 320px;
+    box-shadow: 0 0 15px #00ffc8;
+  }
+  #display {
+    background: black;
+    color: #0ff;
+    font-size: 2rem;
+    padding: 10px;
+    border-radius: 5px;
+    text-align: right;
+    min-height: 50px;
+    overflow-x: auto;
+    margin-bottom: 15px;
+  }
+  .buttons {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  button {
+    font-size: 1.25rem;
+    padding: 15px 0;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    color: #222;
+    background: #0ff;
+    transition: background 0.3s ease;
+  }
+  button.operator {
+    background: #ff5722;
+    color: white;
+  }
+  button.clear {
+    background: #f44336;
+    color: white;
+  }
+  button:active {
+    background: #00bfa5;
+    color: white;
+  }
+</style>
+</head>
+<body>
+
+<div id="calculator">
+  <div id="display">0</div>
+  <div class="buttons">
+    <button class="clear" id="clear">C</button>
+    <button id="del">DEL</button>
+    <button class="operator" data-op="/">÷</button>
+    <button class="operator" data-op="*">×</button>
+
+    <button data-num="7">7</button>
+    <button data-num="8">8</button>
+    <button data-num="9">9</button>
+    <button class="operator" data-op="-">−</button>
+
+    <button data-num="4">4</button>
+    <button data-num="5">5</button>
+    <button data-num="6">6</button>
+    <button class="operator" data-op="+">+</button>
+
+    <button data-num="1">1</button>
+    <button data-num="2">2</button>
+    <button data-num="3">3</button>
+    <button id="equals" style="grid-row: span 2; background:#00bfa5; color:white;">=</button>
+
+    <button data-num="0" style="grid-column: span 2;">0</button>
+    <button data-num=".">.</button>
+  </div>
+</div>
+
+<script>
+// Utilities for parsing and calculating expressions with correct precedence (shunting-yard)
+
+function isOperator(c) {
+  return ['+', '-', '*', '/'].includes(c);
+}
+
+function precedence(op) {
+  if (op === '+' || op === '-') return 1;
+  if (op === '*' || op === '/') return 2;
+  return 0;
+}
+
+function applyOp(a, b, op) {
+  a = parseFloat(a);
+  b = parseFloat(b);
+  switch(op) {
+    case '+': return a + b;
+    case '-': return a - b;
+    case '*': return a * b;
+    case '/':
+      if (b === 0) throw new Error("Division by zero");
+      return a / b;
+  }
+  return 0;
+}
+
+// Parse expression string to result
+function evaluateExpression(expr) {
+  let values = [];
+  let ops = [];
+  let i = 0;
+
+  while(i < expr.length) {
+    let c = expr[i];
+
+    if(c === ' ') {
+      i++;
+      continue;
+    }
+
+    if(!isNaN(c) || c === '.') {
+      // Number (including decimal)
+      let val = '';
+      while(i < expr.length && (!isNaN(expr[i]) || expr[i] === '.')) {
+        val += expr[i];
+        i++;
+      }
+      if(val === '.') throw new Error("Invalid number format");
+      values.push(val);
+      continue;
+    } 
+
+    if(isOperator(c)) {
+      while(ops.length && precedence(ops[ops.length-1]) >= precedence(c)) {
+        let val2 = values.pop();
+        let val1 = values.pop();
+        let op = ops.pop();
+        values.push(applyOp(val1, val2, op));
+      }
+      ops.push(c);
+    } else {
+      throw new Error("Invalid character: " + c);
+    }
+    i++;
+  }
+
+  while(ops.length) {
+    let val2 = values.pop();
+    let val1 = values.pop();
+    let op = ops.pop();
+    values.push(applyOp(val1, val2, op));
+  }
+  
+  return values.pop();
+}
+
+// Calculator logic
+
+const display = document.getElementById('display');
+let currentExpression = '';
+
+function updateDisplay() {
+  display.textContent = currentExpression || '0';
+}
+
+function appendToExpression(char) {
+  if(char === '.' && currentExpression.endsWith('.')) return; // avoid double dots
+  if(char === '.' && currentExpression.split(/[\+\-\*\/]/).pop().includes('.')) return; // only one dot per number
+
+  // Prevent multiple operators in a row
+  if(isOperator(char)) {
+    if(currentExpression === '' && char !== '-') return; // can't start with operator except minus
+    if(isOperator(currentExpression.slice(-1))) {
+      currentExpression = currentExpression.slice(0, -1);
+    }
+  }
+
+  currentExpression += char;
+  updateDisplay();
+}
+
+function clearAll() {
+  currentExpression = '';
+  updateDisplay();
+}
+
+function deleteLast() {
+  currentExpression = currentExpression.slice(0, -1);
+  updateDisplay();
+}
+
+function calculateResult() {
+  try {
+    if(currentExpression === '') return;
+    let result = evaluateExpression(currentExpression);
+    currentExpression = result.toString();
+    updateDisplay();
+  } catch (e) {
+    currentExpression = '';
+    display.textContent = 'Error';
+  }
+}
+
+// Button events
+
+document.querySelectorAll('[data-num]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    appendToExpression(btn.getAttribute('data-num'));
+  });
+});
+
+document.querySelectorAll('.operator').forEach(btn => {
+  btn.addEventListener('click', () => {
+    appendToExpression(btn.getAttribute('data-op'));
+  });
+});
+
+document.getElementById('clear').addEventListener('click', clearAll);
+document.getElementById('del').addEventListener('click', deleteLast);
+document.getElementById('equals').addEventListener('click', calculateResult);
+
+// Keyboard support
+
+window.addEventListener('keydown', e => {
+  const allowedKeys = '0123456789.+-*/';
+  if(allowedKeys.includes(e.key)) {
+    e.preventDefault();
+    appendToExpression(e.key);
+  } else if(e.key === 'Enter') {
+    e.preventDefault();
+    calculateResult();
+  } else if(e.key === 'Backspace') {
+    e.preventDefault();
+    deleteLast();
+  } else if(e.key.toLowerCase() === 'c') {
+    e.preventDefault();
+    clearAll();
+  }
+});
+</script>
+
+</body>
+</html>
